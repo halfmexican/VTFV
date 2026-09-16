@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=io.github.halfmexican.VTFV
+Exec=@bindir@/vtfv --gapplication-service

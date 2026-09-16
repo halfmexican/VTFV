@@ -1,0 +1,8 @@
+# List of source files containing translatable strings.
+# Please keep this file sorted alphabetically.
+data/io.github.halfmexican.VTFV.desktop.in
+data/io.github.halfmexican.VTFV.metainfo.xml.in
+data/io.github.halfmexican.VTFV.gschema.xml
+src/main.vala
+src/window.vala
+src/window.ui

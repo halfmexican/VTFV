@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="vtfv">
+	<schema id="io.github.halfmexican.VTFV" path="/io/github/halfmexican/VTFV/">
+	</schema>
+</schemalist>

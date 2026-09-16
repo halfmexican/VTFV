@@ -1,0 +1,125 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $VtfvWindow: Adw.ApplicationWindow {
+  default-width: 900;
+  default-height: 600;
+  title: _("VTF Viewer");
+
+  Adw.Breakpoint {
+    condition("max-width: 700sp")
+
+    setters {
+      split_view.collapsed: true;
+    }
+  }
+
+  content: Adw.ToolbarView toolbar {
+    top-bar-style: raised;
+
+    [top]
+    Adw.HeaderBar header_bar {
+
+    [start]
+    Gtk.Button open_img_button {
+      icon-name: "document-open-symbolic";
+      tooltip-text: _("Open Image File");
+      action-name: "win.open-vtf";
+      styles ["toolbar"]
+    }
+
+      [end]
+      MenuButton {
+        primary: true;
+        icon-name: "open-menu-symbolic";
+        tooltip-text: _("Menu");
+
+        popover: Gtk.PopoverMenu popover_menu {
+          menu-model: primary_menu;
+        };
+      }
+    }
+
+    content: Adw.OverlaySplitView split_view {
+      show-sidebar: false;
+      min-sidebar-width: 260;
+      max-sidebar-width: 380;
+      sidebar-width-fraction: 0.33;
+
+      sidebar: Adw.PreferencesPage sidebar_page {
+          Adw.PreferencesGroup {
+            title : "Texture Info";
+          Adw.ActionRow row_filename {
+            title: "Name";
+          }
+          Adw.ActionRow row_width {
+            title: "width";
+          }
+          Adw.ActionRow row_height{
+            title: "height";
+          }
+          Adw.ActionRow row_format{
+            title: "format";
+          }
+        }
+      };
+
+      content: Gtk.Stack content_stack {
+        Gtk.StackPage {
+          name : "empty" ;
+
+          child: Adw.StatusPage {
+            icon-name: "document-open-symbolic";
+            title: _("No IMG Loaded ");
+            description: _("");
+            child: Gtk.Button {
+              label: _("Open VTF..");
+              hexpand: false;
+              action-name: "win.open-vtf";
+              styles ["suggested-action", "pill", "compact"]
+            };
+          };
+        }
+        Gtk.StackPage {
+          name : "image";
+          child: Gtk.ScrolledWindow {
+            vexpand: true;
+            hexpand: true;
+
+            child: Gtk.Picture vtf_picture {
+              can-shrink: true;
+              keep-aspect-ratio: true;
+
+            };
+          };
+        }
+      };
+    };
+  };
+}
+
+// Menu Definitions
+menu primary_menu {
+  section {
+    item {
+      custom: "style-switcher";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Preferences");
+      action: "app.preferences";
+    }
+
+    item {
+      label: _("_Keyboard Shortcuts");
+      action: "win.show-help-overlay";
+    }
+
+    item {
+      label: _("_About");
+      action: "app.about";
+    }
+  }
+}

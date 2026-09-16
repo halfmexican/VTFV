@@ -1,0 +1,3 @@
+[submodule "subprojects/VTFLib"]
+	path = subprojects/VTFLib
+	url = https://github.com/sysfce2/VTFLib_Linux.git

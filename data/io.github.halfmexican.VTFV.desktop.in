@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=VTFV
+Exec=vtfv
+Icon=io.github.halfmexican.VTFV
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=GTK;
+StartupNotify=true
+DBusActivatable=true
