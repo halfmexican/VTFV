@@ -19,7 +19,7 @@
  */
 
 public class Vtf.Texture : GLib.Object {
-    private Vtf.UInt id;
+    private uint id;
 
     public uint width { get; private set; }
     public uint height { get; private set; }
@@ -31,7 +31,9 @@ public class Vtf.Texture : GLib.Object {
     }
 
     ~Texture () {
-        if (loaded) Vtf.bind_image (0);
+        if (loaded) {
+            Vtf.bind_image (0); // Unbind
+        }
         Vtf.delete_image (id);
     }
 
@@ -41,8 +43,8 @@ public class Vtf.Texture : GLib.Object {
 
     public bool load (string path) {
         bind ();
-        if (Vtf.load (path, 0) == 0) {
-            stderr.printf ("VTFLib :( : %s\n", Vtf.get_last_error ());
+        if (!Vtf.load (path, false)) {
+            warning ("VTFLib error: %s", Vtf.get_last_error ());
             return false;
         }
         this.width = Vtf.get_width ();
@@ -51,7 +53,7 @@ public class Vtf.Texture : GLib.Object {
         return true;
     }
 
-    public int get_format () {
+    public Vtf.ImageFormat get_format () {
         bind ();
         return Vtf.get_format ();
     }
@@ -61,15 +63,15 @@ public class Vtf.Texture : GLib.Object {
         bind ();
 
         uint8[] pixels = new uint8[width * height * 4];
-        Vtf.Byte* raw = Vtf.get_data (0, 0, 0, 0);
+        uint8* raw = Vtf.get_data (0, 0, 0, 0);
         if (raw == null) return null;
 
-        if (Vtf.convert_to_rgba8888 (raw, pixels, width, height, Vtf.get_format ()) == 0) {
-            stderr.printf ("Failed to convert to RGBA8888\n");
+        if (!Vtf.convert_to_rgba8888 (raw, (uint8*) pixels, width, height, Vtf.get_format ())) {
+            warning ("Failed to convert to RGBA8888: %s", Vtf.get_last_error ());
             return null;
         }
 
         var bytes = new GLib.Bytes (pixels);
-        return new Gdk.MemoryTexture ((int) width, (int) height, Gdk.MemoryFormat.R8G8B8A8, bytes, width * 4);
+        return new Gdk.MemoryTexture ((int) width, (int) height, Gdk.MemoryFormat.R8G8B8A8, bytes, (int) (width * 4));
     }
 }

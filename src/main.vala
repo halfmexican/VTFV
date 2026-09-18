@@ -23,9 +23,8 @@ int main (string[] args) {
     Intl.bind_textdomain_codeset (Config.GETTEXT_PACKAGE, "UTF-8");
     Intl.textdomain (Config.GETTEXT_PACKAGE);
 
-    if (Vtf.initialize () == 0) {
-        stderr.printf ("Fatal: Failed to initialize VTFLib!\n");
-        return 1;
+    if (!Vtf.initialize ()) {
+        error ("Fatal: Failed to initialize VTFLib!\n");
     }
 
     var app = new Vtfv.Application ();
