@@ -80,12 +80,12 @@ template $VtfvWindow: Adw.ApplicationWindow {
             icon-name: "document-open-symbolic";
             title: _("No IMG Loaded ");
             description: _("");
-            child: Gtk.Button {
+            child: Adw.Clamp { maximum-size: 50; Gtk.Button {
               label: _("Open VTF..");
               hexpand: false;
               action-name: "win.open-file";
               styles ["suggested-action", "pill", "compact"]
-            };
+            }};
           };
         }
         Gtk.StackPage {
