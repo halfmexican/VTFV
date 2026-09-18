@@ -31,6 +31,9 @@ public class Vtfv.Window : Adw.ApplicationWindow {
 
     private Gtk.FileFilter supported_files_filter;
 
+    private string? current_vtf_path = null;
+    private bool is_temp_file = false;
+
     public Window (Adw.Application application) {
         Object (application: application);
     }
@@ -40,12 +43,28 @@ public class Vtfv.Window : Adw.ApplicationWindow {
         open_action.activate.connect (() => { open_file.begin (); });
         add_action (open_action);
 
+        var save_action = new GLib.SimpleAction ("save-file", null);
+        save_action.activate.connect (() => { save_file.begin (); });
+        add_action (save_action);
+
         supported_files_filter = new Gtk.FileFilter ();
         supported_files_filter.name = _("VTF and PNG files");
         supported_files_filter.add_pattern ("*.vtf");
         supported_files_filter.add_pattern ("*.VTF");
         supported_files_filter.add_pattern ("*.png");
         supported_files_filter.add_pattern ("*.PNG");
+    }
+
+    ~Window () {
+        cleanup ();
+    }
+
+    private void cleanup () {
+        if (is_temp_file && current_vtf_path != null) {
+            GLib.FileUtils.unlink (current_vtf_path);
+        }
+        current_vtf_path = null;
+        is_temp_file = false;
     }
 
     private async void open_file () {
@@ -66,6 +85,48 @@ public class Vtfv.Window : Adw.ApplicationWindow {
         }
     }
 
+    private async void save_file () {
+        if (current_vtf_path == null) {
+            return;
+        }
+
+        var save_filter = new Gtk.FileFilter ();
+        save_filter.name = _("VTF files");
+        save_filter.add_pattern ("*.vtf");
+        save_filter.add_pattern ("*.VTF");
+
+        var file_dialog = new Gtk.FileDialog () {
+            title = _("Save VTF As"),
+            default_filter = save_filter
+        };
+
+        // Set initial filename
+        string initial_name = title ?? "texture.vtf";
+        initial_name = initial_name.replace (" (Converted)", "");
+        if (!initial_name.down ().has_suffix (".vtf")) {
+            initial_name += ".vtf";
+        }
+        file_dialog.initial_name = initial_name;
+
+        try {
+            GLib.File dest_file = yield file_dialog.save (this, null);
+            if (dest_file != null) {
+                var source_file = GLib.File.new_for_path (current_vtf_path);
+                try {
+                    // Copy the temp/original VTF to the new destination
+                    source_file.copy (dest_file, GLib.FileCopyFlags.OVERWRITE, null);
+                    message ("VTF saved to %s", dest_file.get_path () ?? "unknown");
+                } catch (GLib.Error e) {
+                    warning ("failed to save file: %s", e.message);
+                }
+            }
+        } catch (GLib.Error e) {
+            if (!(e is Gtk.DialogError.DISMISSED)) {
+                warning ("could not save: %s", e.message);
+            }
+        }
+    }
+
     private void process_file (GLib.File file) {
         string basename = file.get_basename ().down ();
         if (basename.has_suffix (".png")) {
@@ -76,6 +137,8 @@ public class Vtfv.Window : Adw.ApplicationWindow {
     }
 
     private void load_vtf_file (GLib.File file) {
+        cleanup ();
+
         var texture = new Vtf.Texture ();
 
         string? path = file.get_path ();
@@ -89,10 +152,15 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             return;
         }
 
+        current_vtf_path = path;
+        is_temp_file = false;
+
         update_ui_with_texture (texture, get_file_name (file));
     }
 
     private async void convert_png_to_vtf (GLib.File file) {
+        cleanup ();
+
         try {
             GLib.FileInputStream stream = file.read (null);
             var pixbuf = new Gdk.Pixbuf.from_stream (stream, null);
@@ -108,7 +176,7 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             if (!is_power_of_two (width) || !is_power_of_two (height)) {
                 uint new_w = next_power_of_two (width);
                 uint new_h = next_power_of_two (height);
-                message ("Resizing image from %ux%u to %ux%u", width, height, new_w, new_h);
+                message ("resizing image from %ux%u to %ux%u", width, height, new_w, new_h);
 
                 // TODO : add setting
                 pixbuf = pixbuf.scale_simple ((int) new_w, (int) new_h, Gdk.InterpType.NEAREST);
@@ -133,7 +201,7 @@ public class Vtfv.Window : Adw.ApplicationWindow {
 
             unowned uint8* dest_ptr = Vtf.get_data (0, 0, 0, 0);
             if (dest_ptr == null) {
-                warning ("VTFLib failed to allocate image data buffer.");
+                warning ("failed to allocate image data buffer.");
                 Vtf.delete_image (handle);
                 return;
             }
@@ -152,7 +220,7 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             string temp_path;
             int fd = GLib.FileUtils.open_tmp ("vtfv-convert-XXXXXX.vtf", out temp_path);
             if (fd == -1) {
-                throw new GLib.FileError.FAILED ("Failed to create temp file");
+                throw new GLib.FileError.FAILED ("failed to create temp file");
             }
             GLib.FileUtils.close (fd);
 
@@ -160,16 +228,20 @@ public class Vtfv.Window : Adw.ApplicationWindow {
 
             var vtf_texture = new Vtf.Texture ();
             if (vtf_texture.load (temp_path)) {
+                current_vtf_path = temp_path;
+                is_temp_file = true;
                 update_ui_with_texture (vtf_texture, get_file_name (file) + " (Converted)");
+            } else {
+                GLib.FileUtils.unlink (temp_path);
             }
 
-            GLib.FileUtils.unlink (temp_path);
             Vtf.delete_image (handle);
 
         } catch (GLib.Error e) {
             warning ("Conversion failed: %s", e.message);
         }
     }
+
     private bool is_power_of_two (uint v) {
         return v > 0 && (v & (v - 1)) == 0;
     }
