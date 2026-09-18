@@ -24,7 +24,15 @@ template $VtfvWindow: Adw.ApplicationWindow {
     Gtk.Button open_img_button {
       icon-name: "document-open-symbolic";
       tooltip-text: _("Open Image File");
-      action-name: "win.open-vtf";
+      action-name: "win.open-file";
+      styles ["toolbar"]
+    }
+
+    [start]
+    Gtk.Button save_img_button {
+      icon-name: "document-save-symbolic";
+      tooltip-text: _("Save to .vtf");
+      action-name: "win.save-file";
       styles ["toolbar"]
     }
 
@@ -75,7 +83,7 @@ template $VtfvWindow: Adw.ApplicationWindow {
             child: Gtk.Button {
               label: _("Open VTF..");
               hexpand: false;
-              action-name: "win.open-vtf";
+              action-name: "win.open-file";
               styles ["suggested-action", "pill", "compact"]
             };
           };

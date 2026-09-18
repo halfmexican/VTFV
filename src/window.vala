@@ -22,82 +22,264 @@
 public class Vtfv.Window : Adw.ApplicationWindow {
 
     [GtkChild] private unowned Adw.OverlaySplitView split_view;
-
     [GtkChild] private unowned Gtk.Stack content_stack;
-
     [GtkChild] private unowned Gtk.Picture vtf_picture;
-
     [GtkChild] private unowned Adw.ActionRow row_filename;
-
     [GtkChild] private unowned Adw.ActionRow row_width;
-
     [GtkChild] private unowned Adw.ActionRow row_height;
-
     [GtkChild] private unowned Adw.ActionRow row_format;
+
+    private Gtk.FileFilter supported_files_filter;
+
+    private string? current_vtf_path = null;
+    private bool is_temp_file = false;
 
     public Window (Adw.Application application) {
         Object (application: application);
     }
 
     construct {
-        var open_action = new GLib.SimpleAction ("open-vtf", null);
-        open_action.activate.connect (() => {
-            open_vtf.begin ();
-        });
+        var open_action = new GLib.SimpleAction ("open-file", null);
+        open_action.activate.connect (() => { open_file.begin (); });
         add_action (open_action);
+
+        var save_action = new GLib.SimpleAction ("save-file", null);
+        save_action.activate.connect (() => { save_file.begin (); });
+        add_action (save_action);
+
+        supported_files_filter = new Gtk.FileFilter ();
+        supported_files_filter.name = _("VTF and PNG files");
+        supported_files_filter.add_pattern ("*.vtf");
+        supported_files_filter.add_pattern ("*.VTF");
+        supported_files_filter.add_pattern ("*.png");
+        supported_files_filter.add_pattern ("*.PNG");
     }
 
-    private async void open_vtf () {
-        var dialog = new Gtk.FileDialog ();
-        dialog.title = _("Open VTF file");
+    ~Window () {
+        cleanup ();
+    }
 
-        var filter = new Gtk.FileFilter ();
-        filter.name = _("VTF files");
-        filter.add_pattern ("*.vtf");
-        filter.add_pattern ("*.VTF");
+    private void cleanup () {
+        if (is_temp_file && current_vtf_path != null) {
+            GLib.FileUtils.unlink (current_vtf_path);
+        }
+        current_vtf_path = null;
+        is_temp_file = false;
+    }
 
-        dialog.default_filter = filter;
+    private async void open_file () {
+        var file_dialog = new Gtk.FileDialog () {
+            title = _("Open Image"),
+            default_filter = supported_files_filter
+        };
 
         try {
-            var file = yield dialog.open (this, null);
+            GLib.File file = yield file_dialog.open (this, null);
             if (file != null) {
-                load_vtf_file (file);
+                process_file (file);
             }
         } catch (GLib.Error e) {
             if (!(e is Gtk.DialogError.DISMISSED)) {
-                warning ("Could not open VTF file: %s", e.message);
+                warning ("Could not open file: %s", e.message);
             }
+        }
+    }
+
+    private async void save_file () {
+        if (current_vtf_path == null) {
+            return;
+        }
+
+        var save_filter = new Gtk.FileFilter ();
+        save_filter.name = _("VTF files");
+        save_filter.add_pattern ("*.vtf");
+        save_filter.add_pattern ("*.VTF");
+
+        var file_dialog = new Gtk.FileDialog () {
+            title = _("Save VTF As"),
+            default_filter = save_filter
+        };
+
+        // Set initial filename
+        string initial_name = title ?? "texture.vtf";
+        initial_name = initial_name.replace (" (Converted)", "");
+        if (!initial_name.down ().has_suffix (".vtf")) {
+            initial_name += ".vtf";
+        }
+        file_dialog.initial_name = initial_name;
+
+        try {
+            GLib.File dest_file = yield file_dialog.save (this, null);
+            if (dest_file != null) {
+                var source_file = GLib.File.new_for_path (current_vtf_path);
+                try {
+                    // Copy the temp/original VTF to the new destination
+                    source_file.copy (dest_file, GLib.FileCopyFlags.OVERWRITE, null);
+                    message ("VTF saved to %s", dest_file.get_path () ?? "unknown");
+                } catch (GLib.Error e) {
+                    warning ("failed to save file: %s", e.message);
+                }
+            }
+        } catch (GLib.Error e) {
+            if (!(e is Gtk.DialogError.DISMISSED)) {
+                warning ("could not save: %s", e.message);
+            }
+        }
+    }
+
+    private void process_file (GLib.File file) {
+        string basename = file.get_basename ().down ();
+        if (basename.has_suffix (".png")) {
+            convert_png_to_vtf.begin (file);
+        } else {
+            load_vtf_file (file);
         }
     }
 
     private void load_vtf_file (GLib.File file) {
+        cleanup ();
+
         var texture = new Vtf.Texture ();
 
-        var path = file.get_path ();
+        string? path = file.get_path ();
         if (path == null) {
-            warning ("Cannot load non-local file directly with VTFLib.");
+            warning ("failed to load path");
             return;
         }
 
         if (!texture.load (path)) {
-            warning ("Failed to load VTF.");
+            warning ("failed to load VTF: %s", Vtf.get_last_error ());
             return;
         }
 
-        var gdk_texture = texture.to_gdk_texture ();
+        current_vtf_path = path;
+        is_temp_file = false;
 
+        update_ui_with_texture (texture, get_file_name (file));
+    }
+
+    private async void convert_png_to_vtf (GLib.File file) {
+        cleanup ();
+
+        try {
+            GLib.FileInputStream stream = file.read (null);
+            var pixbuf = new Gdk.Pixbuf.from_stream (stream, null);
+
+            if (!pixbuf.has_alpha) {
+                pixbuf = pixbuf.add_alpha (false, 0, 0, 0);
+            }
+
+            uint width = (uint) pixbuf.width;
+            uint height = (uint) pixbuf.height;
+
+            // Valve need a power of 2 dimensions
+            if (!is_power_of_two (width) || !is_power_of_two (height)) {
+                uint new_w = next_power_of_two (width);
+                uint new_h = next_power_of_two (height);
+                message ("resizing image from %ux%u to %ux%u", width, height, new_w, new_h);
+
+                // TODO : add setting
+                pixbuf = pixbuf.scale_simple ((int) new_w, (int) new_h, Gdk.InterpType.NEAREST);
+
+                width = new_w;
+                height = new_h;
+            }
+
+            int rowstride = pixbuf.rowstride;
+            unowned uint8[] src_pixels = pixbuf.get_pixels ();
+            unowned uint8* src_ptr = (uint8*) src_pixels;
+
+            uint handle;
+            Vtf.create_image (out handle);
+            Vtf.bind_image (handle);
+
+            if (!Vtf.image_create (width, height, 1, 1, 1, Vtf.ImageFormat.RGBA8888, false, false, false)) {
+                warning ("failed to create image: %s", Vtf.get_last_error ());
+                Vtf.delete_image (handle);
+                return;
+            }
+
+            unowned uint8* dest_ptr = Vtf.get_data (0, 0, 0, 0);
+            if (dest_ptr == null) {
+                warning ("failed to allocate image data buffer.");
+                Vtf.delete_image (handle);
+                return;
+            }
+
+            for (uint y = 0; y < height; y++) {
+                int src_offset = (int) y * rowstride;
+                int dest_offset = (int) y * (int) width * 4;
+
+                GLib.Memory.copy (
+                    (void*) (dest_ptr + dest_offset),
+                    (void*) (src_ptr + src_offset),
+                    width * 4
+                );
+            }
+
+            string temp_path;
+            int fd = GLib.FileUtils.open_tmp ("vtfv-convert-XXXXXX.vtf", out temp_path);
+            if (fd == -1) {
+                throw new GLib.FileError.FAILED ("failed to create temp file");
+            }
+            GLib.FileUtils.close (fd);
+
+            Vtf.save (temp_path);
+
+            var vtf_texture = new Vtf.Texture ();
+            if (vtf_texture.load (temp_path)) {
+                current_vtf_path = temp_path;
+                is_temp_file = true;
+                update_ui_with_texture (vtf_texture, get_file_name (file) + " (Converted)");
+            } else {
+                GLib.FileUtils.unlink (temp_path);
+            }
+
+            Vtf.delete_image (handle);
+
+        } catch (GLib.Error e) {
+            warning ("Conversion failed: %s", e.message);
+        }
+    }
+
+    private bool is_power_of_two (uint v) {
+        return v > 0 && (v & (v - 1)) == 0;
+    }
+
+    private uint next_power_of_two (uint v) {
+        v--;
+        v |= v >> 1;
+        v |= v >> 2;
+        v |= v >> 4;
+        v |= v >> 8;
+        v |= v >> 16;
+        v++;
+        return v;
+    }
+
+    private void update_ui_with_texture (Vtf.Texture texture, string display_name) {
+        var gdk_texture = texture.to_gdk_texture ();
         if (gdk_texture != null) {
             vtf_picture.paintable = gdk_texture;
             content_stack.visible_child_name = "image";
+
+            row_filename.subtitle = display_name;
+            row_width.subtitle = texture.width.to_string ();
+            row_height.subtitle = texture.height.to_string ();
+            row_format.subtitle = texture.get_format ().to_string ();
+
+            split_view.show_sidebar = true;
+            title = display_name;
         }
+    }
 
-        // sidebar metadata
-        row_filename.subtitle = file.get_basename ();
-        row_width.subtitle = texture.width.to_string ();
-        row_height.subtitle = texture.height.to_string ();
-        row_format.subtitle = texture.get_format ().to_string ();
-
-        split_view.show_sidebar = true;
-        title = file.get_basename ();
+    private static string get_file_name (GLib.File file) {
+        try {
+            var info = file.query_info ("standard::name", GLib.FileQueryInfoFlags.NONE, null);
+            return info.get_name ();
+        } catch (GLib.Error e) {
+            warning (e.message);
+            return file.get_basename () ?? "Unknown";
+        }
     }
 }
