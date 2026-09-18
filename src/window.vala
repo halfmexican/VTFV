@@ -103,8 +103,21 @@ public class Vtfv.Window : Adw.ApplicationWindow {
 
             uint width = (uint) pixbuf.width;
             uint height = (uint) pixbuf.height;
-            int rowstride = pixbuf.rowstride;
 
+            // Valve need a power of 2 dimensions
+            if (!is_power_of_two (width) || !is_power_of_two (height)) {
+                uint new_w = next_power_of_two (width);
+                uint new_h = next_power_of_two (height);
+                message ("Resizing image from %ux%u to %ux%u", width, height, new_w, new_h);
+
+                // TODO : add setting
+                pixbuf = pixbuf.scale_simple ((int) new_w, (int) new_h, Gdk.InterpType.NEAREST);
+
+                width = new_w;
+                height = new_h;
+            }
+
+            int rowstride = pixbuf.rowstride;
             unowned uint8[] src_pixels = pixbuf.get_pixels ();
             unowned uint8* src_ptr = (uint8*) src_pixels;
 
@@ -112,16 +125,15 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             Vtf.create_image (out handle);
             Vtf.bind_image (handle);
 
-            Vtf.image_create (
-                width, height, 1, 1, 1,
-                Vtf.ImageFormat.RGBA8888,
-                false, false, false
-            );
+            if (!Vtf.image_create (width, height, 1, 1, 1, Vtf.ImageFormat.RGBA8888, false, false, false)) {
+                warning ("failed to create image: %s", Vtf.get_last_error ());
+                Vtf.delete_image (handle);
+                return;
+            }
 
             unowned uint8* dest_ptr = Vtf.get_data (0, 0, 0, 0);
-
             if (dest_ptr == null) {
-                warning ("failed to allocate image data buffer.");
+                warning ("VTFLib failed to allocate image data buffer.");
                 Vtf.delete_image (handle);
                 return;
             }
@@ -158,6 +170,20 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             warning ("Conversion failed: %s", e.message);
         }
     }
+    private bool is_power_of_two (uint v) {
+        return v > 0 && (v & (v - 1)) == 0;
+    }
+
+    private uint next_power_of_two (uint v) {
+        v--;
+        v |= v >> 1;
+        v |= v >> 2;
+        v |= v >> 4;
+        v |= v >> 8;
+        v |= v >> 16;
+        v++;
+        return v;
+    }
 
     private void update_ui_with_texture (Vtf.Texture texture, string display_name) {
         var gdk_texture = texture.to_gdk_texture ();
@@ -180,7 +206,7 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             var info = file.query_info ("standard::name", GLib.FileQueryInfoFlags.NONE, null);
             return info.get_name ();
         } catch (GLib.Error e) {
-            warning ("Failed to get file name: %s", e.message);
+            warning (e.message);
             return file.get_basename () ?? "Unknown";
         }
     }
