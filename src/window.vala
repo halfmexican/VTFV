@@ -179,7 +179,7 @@ public class Vtfv.Window : Adw.ApplicationWindow {
                 message ("resizing image from %ux%u to %ux%u", width, height, new_w, new_h);
 
                 // TODO : add setting
-                pixbuf = pixbuf.scale_simple ((int) new_w, (int) new_h, Gdk.InterpType.NEAREST);
+                pixbuf = pixbuf.scale_simple ((int) new_w, (int) new_h, Gdk.InterpType.BILINEAR);
 
                 width = new_w;
                 height = new_h;
