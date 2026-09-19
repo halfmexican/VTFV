@@ -4,6 +4,7 @@ vtfv_sources = files(
   'application.vala',
   'window.vala',
   'VTFTexture.vala',
+  'NearestPicture.vala'
 )
 
 vtfv_sources += vtf_vapi

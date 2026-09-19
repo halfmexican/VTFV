@@ -23,7 +23,7 @@ public class Vtfv.Window : Adw.ApplicationWindow {
 
     [GtkChild] private unowned Adw.OverlaySplitView split_view;
     [GtkChild] private unowned Gtk.Stack content_stack;
-    [GtkChild] private unowned Gtk.Picture vtf_picture;
+    [GtkChild] private unowned NearestPicture vtf_picture;
     [GtkChild] private unowned Adw.ActionRow row_filename;
     [GtkChild] private unowned Adw.ActionRow row_width;
     [GtkChild] private unowned Adw.ActionRow row_height;
@@ -104,16 +104,7 @@ public class Vtfv.Window : Adw.ApplicationWindow {
         click.button = 1;
         click.pressed.connect ((n_press, x, y) => {
             if (n_press == 2) {
-                if (zoom_level != 1.0) {
-                    apply_zoom (1.0);
-                } else {
-                    // Fit to window
-                    vtf_picture.paintable = original_texture;
-                    vtf_picture.content_fit = Gtk.ContentFit.CONTAIN;
-                    vtf_picture.width_request = -1;
-                    vtf_picture.height_request = -1;
-                    zoom_level = 1.0;
-                }
+                apply_zoom (1.0);
                 click.set_state (Gtk.EventSequenceState.CLAIMED);
             }
         });
@@ -128,14 +119,14 @@ public class Vtfv.Window : Adw.ApplicationWindow {
         zoom_level = new_zoom;
 
         if (zoom_level <= 1.0) {
-            vtf_picture.paintable = original_texture;
+            vtf_picture.texture = original_texture;
             vtf_picture.width_request = -1;
             vtf_picture.height_request = -1;
         } else {
             int target_w = (int) (base_width * zoom_level);
             int target_h = (int) (base_height * zoom_level);
 
-            vtf_picture.paintable = original_texture;
+            vtf_picture.texture = original_texture;
             vtf_picture.width_request = target_w;
             vtf_picture.height_request = target_h;
         }
@@ -174,7 +165,6 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             default_filter = save_filter
         };
 
-        // Set initial filename
         string initial_name = title ?? "texture.vtf";
         initial_name = initial_name.replace (" (Converted)", "");
         if (!initial_name.down ().has_suffix (".vtf")) {
@@ -187,7 +177,6 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             if (dest_file != null) {
                 var source_file = GLib.File.new_for_path (current_vtf_path);
                 try {
-                    // Copy the temp/original VTF to the new destination
                     source_file.copy (dest_file, GLib.FileCopyFlags.OVERWRITE, null);
                     message ("VTF saved to %s", dest_file.get_path () ?? "unknown");
                 } catch (GLib.Error e) {
@@ -235,8 +224,9 @@ public class Vtfv.Window : Adw.ApplicationWindow {
     private async void convert_png_to_vtf (GLib.File file) {
         cleanup ();
 
+        GLib.FileInputStream? stream = null;
         try {
-            GLib.FileInputStream stream = file.read (null);
+            stream = yield file.read_async (GLib.Priority.DEFAULT, null);
             var pixbuf = new Gdk.Pixbuf.from_stream (stream, null);
 
             if (!pixbuf.has_alpha) {
@@ -246,13 +236,11 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             uint width = (uint) pixbuf.width;
             uint height = (uint) pixbuf.height;
 
-            // Valve need a power of 2 dimensions
             if (!is_power_of_two (width) || !is_power_of_two (height)) {
                 uint new_w = next_power_of_two (width);
                 uint new_h = next_power_of_two (height);
                 message ("resizing image from %ux%u to %ux%u", width, height, new_w, new_h);
 
-                // TODO : add setting
                 pixbuf = pixbuf.scale_simple ((int) new_w, (int) new_h, Gdk.InterpType.BILINEAR);
 
                 width = new_w;
@@ -313,6 +301,9 @@ public class Vtfv.Window : Adw.ApplicationWindow {
 
         } catch (GLib.Error e) {
             warning ("Conversion failed: %s", e.message);
+        } finally {
+            stream.close ();
+            }
         }
     }
 
@@ -339,8 +330,7 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             base_height = texture.height;
             zoom_level = 1.0;
 
-            vtf_picture.paintable = gdk_texture;
-            vtf_picture.content_fit = Gtk.ContentFit.CONTAIN;
+            vtf_picture.texture = gdk_texture;
             vtf_picture.width_request = -1;
             vtf_picture.height_request = -1;
             content_stack.visible_child_name = "image";
@@ -348,7 +338,8 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             row_filename.subtitle = display_name;
             row_width.subtitle = texture.width.to_string ();
             row_height.subtitle = texture.height.to_string ();
-            row_format.subtitle = texture.get_format ().to_string ().replace("IMAGE_FORMAT_", "");
+
+            row_format.subtitle = texture.get_format ().to_string ().replace ("IMAGE_FORMAT_", "");
 
             split_view.show_sidebar = true;
             title = display_name;
@@ -365,3 +356,4 @@ public class Vtfv.Window : Adw.ApplicationWindow {
         }
     }
 }
+

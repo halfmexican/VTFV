@@ -22,7 +22,7 @@ template $VtfvWindow: Adw.ApplicationWindow {
 
     [start]
     Gtk.Button open_img_button {
-      icon-name: "document-open-symbolic";
+      icon-name: "folder-open-symbolic";
       tooltip-text: _("Open Image File");
       action-name: "win.open-file";
       styles ["toolbar"]
@@ -77,7 +77,7 @@ template $VtfvWindow: Adw.ApplicationWindow {
           name : "empty" ;
 
           child: Adw.StatusPage {
-            icon-name: "document-open-symbolic";
+            icon-name: "image-round-symbolic";
             title: _("No IMG Loaded ");
             description: _("");
             child: Adw.Clamp { maximum-size: 50; Gtk.Button {
@@ -94,9 +94,7 @@ template $VtfvWindow: Adw.ApplicationWindow {
             vexpand: true;
             hexpand: true;
 
-            child: Gtk.Picture vtf_picture {
-              can-shrink: true;
-              keep-aspect-ratio: true;
+            child: $VtfvNearestPicture vtf_picture {
 
             };
           };
