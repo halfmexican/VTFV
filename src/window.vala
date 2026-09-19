@@ -77,7 +77,7 @@ public class Vtfv.Window : Adw.ApplicationWindow {
     }
 
     private void setup_zoom_controllers () {
-        // Ctrl + Scroll
+        // TODO: Ctrl + Scroll
         var scroll_ctrl = new Gtk.EventControllerScroll (Gtk.EventControllerScrollFlags.VERTICAL);
         scroll_ctrl.scroll.connect ((dx, dy) => {
             var state = scroll_ctrl.get_current_event_state ();
@@ -302,10 +302,15 @@ public class Vtfv.Window : Adw.ApplicationWindow {
         } catch (GLib.Error e) {
             warning ("Conversion failed: %s", e.message);
         } finally {
-            stream.close ();
+                if (stream != null) {
+                    try {
+                        stream.close ();
+                    } catch (GLib.Error e) {
+                        warning (e.message);
+                    }
+                }
             }
         }
-    }
 
     private bool is_power_of_two (uint v) {
         return v > 0 && (v & (v - 1)) == 0;
