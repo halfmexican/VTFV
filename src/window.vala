@@ -348,7 +348,7 @@ public class Vtfv.Window : Adw.ApplicationWindow {
             row_filename.subtitle = display_name;
             row_width.subtitle = texture.width.to_string ();
             row_height.subtitle = texture.height.to_string ();
-            row_format.subtitle = texture.get_format ().to_string ();
+            row_format.subtitle = texture.get_format ().to_string ().replace("IMAGE_FORMAT_", "");
 
             split_view.show_sidebar = true;
             title = display_name;
