@@ -4,4 +4,9 @@
     <file preprocess="xml-stripblanks">gtk/window.ui</file>
     <file preprocess="xml-stripblanks">shortcuts-dialog.ui</file>
   </gresource>
+  <gresource prefix="/io/github/halfmexican/VTFV/icons">
+    <file alias="image-round-symbolic.svg" compressed="true" preprocess="xml-stripblanks">../data/icons/hicolor/symbolic/image-round-symbolic.svg</file>
+    <file alias="folder-open-symbolic.svg" compressed="true" preprocess="xml-stripblanks">../data/icons/hicolor/symbolic/folder-open-symbolic.svg</file>
+    <file alias="document-save-symbolic.svg" compressed="true" preprocess="xml-stripblanks">../data/icons/hicolor/symbolic/document-save-symbolic.svg</file>
+  </gresource>
 </gresources>
