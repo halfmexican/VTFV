@@ -34,6 +34,13 @@ public class Vtfv.Window : Adw.ApplicationWindow {
     private string? current_vtf_path = null;
     private bool is_temp_file = false;
 
+    // Zoom state
+    private Gdk.Texture? original_texture = null;
+    private uint base_width = 0;
+    private uint base_height = 0;
+    private double zoom_level = 1.0;
+    private double zoom_at_gesture_start = 1.0;
+
     public Window (Adw.Application application) {
         Object (application: application);
     }
@@ -53,6 +60,8 @@ public class Vtfv.Window : Adw.ApplicationWindow {
         supported_files_filter.add_pattern ("*.VTF");
         supported_files_filter.add_pattern ("*.png");
         supported_files_filter.add_pattern ("*.PNG");
+
+        setup_zoom_controllers ();
     }
 
     ~Window () {
@@ -65,6 +74,71 @@ public class Vtfv.Window : Adw.ApplicationWindow {
         }
         current_vtf_path = null;
         is_temp_file = false;
+    }
+
+    private void setup_zoom_controllers () {
+        // Ctrl + Scroll
+        var scroll_ctrl = new Gtk.EventControllerScroll (Gtk.EventControllerScrollFlags.VERTICAL);
+        scroll_ctrl.scroll.connect ((dx, dy) => {
+            var state = scroll_ctrl.get_current_event_state ();
+            if (Gdk.ModifierType.CONTROL_MASK in state) {
+                apply_zoom (zoom_level * GLib.Math.pow (1.1, -dy));
+                return true;
+            }
+            return false;
+        });
+        vtf_picture.add_controller (scroll_ctrl);
+
+        // Touchpad pinch
+        var pinch = new Gtk.GestureZoom ();
+        pinch.begin.connect (() => {
+            zoom_at_gesture_start = zoom_level;
+        });
+        pinch.scale_changed.connect ((scale) => {
+            apply_zoom (zoom_at_gesture_start * scale);
+        });
+        vtf_picture.add_controller (pinch);
+
+        // Double-click: toggle fit / 100%
+        var click = new Gtk.GestureClick ();
+        click.button = 1;
+        click.pressed.connect ((n_press, x, y) => {
+            if (n_press == 2) {
+                if (zoom_level != 1.0) {
+                    apply_zoom (1.0);
+                } else {
+                    // Fit to window
+                    vtf_picture.paintable = original_texture;
+                    vtf_picture.content_fit = Gtk.ContentFit.CONTAIN;
+                    vtf_picture.width_request = -1;
+                    vtf_picture.height_request = -1;
+                    zoom_level = 1.0;
+                }
+                click.set_state (Gtk.EventSequenceState.CLAIMED);
+            }
+        });
+        vtf_picture.add_controller (click);
+    }
+
+    private void apply_zoom (double new_zoom) {
+        if (original_texture == null) return;
+
+        if (new_zoom < 0.1) new_zoom = 0.1;
+        if (new_zoom > 8.0) new_zoom = 8.0;
+        zoom_level = new_zoom;
+
+        if (zoom_level <= 1.0) {
+            vtf_picture.paintable = original_texture;
+            vtf_picture.width_request = -1;
+            vtf_picture.height_request = -1;
+        } else {
+            int target_w = (int) (base_width * zoom_level);
+            int target_h = (int) (base_height * zoom_level);
+
+            vtf_picture.paintable = original_texture;
+            vtf_picture.width_request = target_w;
+            vtf_picture.height_request = target_h;
+        }
     }
 
     private async void open_file () {
@@ -260,13 +334,21 @@ public class Vtfv.Window : Adw.ApplicationWindow {
     private void update_ui_with_texture (Vtf.Texture texture, string display_name) {
         var gdk_texture = texture.to_gdk_texture ();
         if (gdk_texture != null) {
+            original_texture = gdk_texture;
+            base_width = texture.width;
+            base_height = texture.height;
+            zoom_level = 1.0;
+
             vtf_picture.paintable = gdk_texture;
+            vtf_picture.content_fit = Gtk.ContentFit.CONTAIN;
+            vtf_picture.width_request = -1;
+            vtf_picture.height_request = -1;
             content_stack.visible_child_name = "image";
 
             row_filename.subtitle = display_name;
             row_width.subtitle = texture.width.to_string ();
             row_height.subtitle = texture.height.to_string ();
-            row_format.subtitle = texture.get_format ().to_string ();
+            row_format.subtitle = texture.get_format ().to_string ().replace("IMAGE_FORMAT_", "");
 
             split_view.show_sidebar = true;
             title = display_name;
